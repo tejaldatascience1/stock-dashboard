@@ -13,28 +13,24 @@ class DCFValuation:
                 
             latest_cf_col = self.cf.columns[0]
             
-            # Helper function to find values flexibly
             def get_val(df, col, names):
                 for name in names:
                     if name in df.index:
                         return df.loc[name, col]
                 return 0.0
 
-            # Free Cash Flow (FCF) approximation: Operating Cash Flow - Capital Expenditures
             ocf = get_val(self.cf, latest_cf_col, ['Operating Cash Flow', 'Total Cash From Operating Activities'])
             capex = abs(get_val(self.cf, latest_cf_col, ['Capital Expenditures', 'Purchase Of Property Plant And Equipment']))
             
             fcf = ocf - capex
             if fcf <= 0:
-                fcf = ocf * 0.5  # Fallback rough estimation if Capex data is messy
+                fcf = ocf * 0.5  
                 
-            # Assumptions for DCF
-            growth_rate = 0.08      # Estimated 8% growth rate for next 5 years
-            discount_rate = 0.10    # Required rate of return (Cost of Capital) ~ 10%
-            terminal_growth = 0.03  # Long-term stable growth rate ~ 3%
+            growth_rate = 0.08      
+            discount_rate = 0.10    
+            terminal_growth = 0.03  
             years = 5
             
-            # Projecting Future Cash Flows
             future_fcf = []
             current_fcf = fcf
             for i in range(years):
@@ -43,38 +39,32 @@ class DCFValuation:
                 future_fcf.append(discounted_val)
                 
             sum_present_value = sum(future_fcf)
-            
-            # Terminal Value Calculation
             terminal_value = (future_fcf[-1] * (1 + terminal_growth)) / (discount_rate - terminal_growth)
             discounted_terminal_value = terminal_value / ((1 + discount_rate) ** years)
             
-            # Total Enterprise Value
             enterprise_value = sum_present_value + discounted_terminal_value
             
-            # Equity Value = Enterprise Value + Cash - Total Debt
             latest_bs_col = self.bs.columns[0]
             cash = get_val(self.bs, latest_bs_col, ['Cash And Cash Equivalents', 'Cash Cash Equivalents And Short Term Investments'])
             total_debt = get_val(self.bs, latest_bs_col, ['Total Debt', 'Long Term Debt', 'Short Long Term Debt'])
             
             equity_value = enterprise_value + cash - total_debt
             
-            # Intrinsic Value Per Share
             shares_outstanding = self.stock.info.get('sharesOutstanding', 0)
-            if shares_outstanding == 0 or shares_outstanding is None:
-                shares_outstanding = 1  # Fallback to prevent division by zero
+            if shares_outstanding == 0:
+                return "Error: Shares outstanding data not available."
                 
             intrinsic_value_per_share = equity_value / shares_outstanding
             
-            # Safe fetching for current price using history if info fails
-            hist = self.stock.history(period="1d")
-            if not hist.empty:
-                current_market_price = hist['Close'].iloc[-1]
-            else:
-                current_market_price = self.stock.info.get('currentPrice', self.stock.info.get('regularMarketPrice', 0))
-                if current_market_price is None or current_market_price == 0:
-                    current_market_price = 150.0  # Safe fallback default price
+            # Robust price fetching fallback to eliminate N/A
+            current_market_price = self.stock.info.get('currentPrice', 0)
+            if current_market_price == 0:
+                current_market_price = self.stock.info.get('regularMarketPrice', 0)
+            if current_market_price == 0:
+                hist_prices = self.stock.history(period="1d")
+                if not hist_prices.empty:
+                    current_market_price = hist_prices['Close'].iloc[-1]
             
-            # Margin of Safety / Status
             if current_market_price > 0:
                 diff_percentage = ((intrinsic_value_per_share - current_market_price) / current_market_price) * 100
                 if intrinsic_value_per_share > current_market_price:
