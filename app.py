@@ -65,13 +65,18 @@ if run_button and user_ticker:
                 ai_analyzer = AIInsightsAnalyzer(stock, historical_data, ratios, z_result, val_result)
                 ai_summary = ai_analyzer.generate_smart_executive_summary()
                 
-                # --- Parse Results for UI ---
-                z_score = z_result.get('Z-Score', 0) if isinstance(z_result, dict) else (z_result or 0)
+                # --- Parse Results for UI (Safely handled) ---
+                z_score = z_result.get('Z-Score', 0) if isinstance(z_result, dict) else 0
                 zone = z_result.get('Zone', 'N/A') if isinstance(z_result, dict) else 'N/A'
                 
-                intrinsic_val = val_result.get('Intrinsic Value', 'N/A') if isinstance(val_result, dict) else 'N/A'
-                current_price = val_result.get('Current Price', 'N/A') if isinstance(val_result, dict) else 'N/A'
-                val_status = val_result.get('Status', 'N/A') if isinstance(val_result, dict) else str(val_result)
+                if isinstance(val_result, dict):
+                    intrinsic_val = val_result.get('Intrinsic Value', 'N/A')
+                    current_price = val_result.get('Current Price', 'N/A')
+                    val_status = val_result.get('Status', 'N/A')
+                else:
+                    intrinsic_val = 'N/A'
+                    current_price = 'N/A'
+                    val_status = str(val_result) if val_result is not None else 'N/A'
 
                 # --- UI Layout: Metrics Cards ---
                 st.success(f"Successfully generated report for {user_ticker}!")
@@ -90,7 +95,7 @@ if run_button and user_ticker:
                 r_col1.write(f"**Latest Financial Year:** {ratios['Latest Year']}")
                 r_col2.write(f"**Working Capital:** {ratios['Working Capital']:,.2f}")
                 r_col3.write(f"**Current Ratio:** {ratios['Current Ratio']}")
-                r_col4 = st.write(f"**Valuation Status:** {val_status}")
+                st.write(f"**Valuation Status:** {val_status}")
 
                 st.markdown("---")
 
@@ -106,4 +111,4 @@ if run_button and user_ticker:
                 st.error(f"Could not retrieve financial statements for {user_ticker}. Please check the ticker symbol.")
                 
         except Exception as e:
-                st.error(f"An error occurred: {e}")
+            st.error(f"An error occurred: {e}")
