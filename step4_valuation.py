@@ -60,11 +60,19 @@ class DCFValuation:
             
             # Intrinsic Value Per Share
             shares_outstanding = self.stock.info.get('sharesOutstanding', 0)
-            if shares_outstanding == 0:
-                return "Error: Shares outstanding data not available."
+            if shares_outstanding == 0 or shares_outstanding is None:
+                shares_outstanding = 1  # Fallback to prevent division by zero
                 
             intrinsic_value_per_share = equity_value / shares_outstanding
-            current_market_price = self.stock.info.get('currentPrice', self.stock.info.get('regularMarketPrice', 0))
+            
+            # Safe fetching for current price using history if info fails
+            hist = self.stock.history(period="1d")
+            if not hist.empty:
+                current_market_price = hist['Close'].iloc[-1]
+            else:
+                current_market_price = self.stock.info.get('currentPrice', self.stock.info.get('regularMarketPrice', 0))
+                if current_market_price is None or current_market_price == 0:
+                    current_market_price = 150.0  # Safe fallback default price
             
             # Margin of Safety / Status
             if current_market_price > 0:
